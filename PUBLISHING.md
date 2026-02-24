@@ -36,7 +36,7 @@ Step-by-step guide to publish this extension with GitHub Actions CI/CD.
   "version": "0.1.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/your-username/cursor-telegram-bridge"
+    "url": "https://github.com/namanbarkiya/code-bridge"
   },
   "icon": "icon.png"
 }
@@ -58,7 +58,7 @@ This produces a `.vsix` file. Verify it installs correctly:
 
 ```bash
 # In Cursor or VS Code
-code --install-extension cursor-telegram-bridge-0.1.0.vsix
+code --install-extension code-bridge-0.1.0.vsix
 ```
 
 ## Step 5: Test publishing manually (optional)
@@ -184,8 +184,8 @@ The `publish` job triggers automatically:
 
 ## Step 9: Verify
 
-1. Check https://marketplace.visualstudio.com/items?itemName=your-publisher-id.cursor-telegram-bridge
-2. In Cursor/VS Code, search for "Cursor Telegram Bridge" in the Extensions panel.
+1. Check https://marketplace.visualstudio.com/items?itemName=your-publisher-id.code-bridge
+2. In Cursor/VS Code, search for "Code Bridge" in the Extensions panel.
 3. Verify the latest version appears.
 
 ## Publishing to Open VSX (optional)
@@ -210,7 +210,7 @@ If you also want to publish to [Open VSX Registry](https://open-vsx.org) (used b
 - [ ] `icon.png` exists in project root (128x128 or 256x256)
 - [ ] `README.md` is up to date
 - [ ] `LICENSE` file exists
-- [ ] `.vscodeignore` excludes source files, dev configs, and `.tg-bridge/`
+- [ ] `.vscodeignore` excludes source files, dev configs, and `.code-bridge/`
 - [ ] Local `npx @vscode/vsce package` succeeds without warnings
 - [ ] `VSCE_PAT` secret is set in GitHub repo settings
 - [ ] Extension installs and works from the `.vsix` file
@@ -236,4 +236,4 @@ Use [Semantic Versioning](https://semver.org):
 - Add `"repository"` field to `package.json`.
 
 **VSIX too large**
-- Check `.vscodeignore` is excluding `node_modules/`, `src/`, `.tg-bridge/`, etc. The esbuild bundle in `out/` should be the only runtime code.
+- Check `.vscodeignore` is excluding `node_modules/`, `src/`, `.code-bridge/`, etc. The esbuild bundle in `out/` should be the only runtime code.

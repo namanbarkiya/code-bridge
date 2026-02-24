@@ -1,4 +1,4 @@
-# Cursor Telegram Bridge
+# Code Bridge
 
 Control your Cursor/VS Code editor remotely from Telegram. Run terminal commands, send prompts to the Cursor AI agent, and approve or deny agent actions — all from your phone.
 
@@ -42,7 +42,7 @@ No extra AI layer. Messages go straight through; terminal output comes straight 
 ### 3. Install and configure the extension
 
 ```bash
-cd cursor-telegram-bridge
+cd code-bridge
 npm install
 npm run build
 ```
@@ -51,14 +51,14 @@ Open Cursor Settings (JSON) and add:
 
 ```json
 {
-  "tgBridge.botToken": "123456789:AAHk...",
-  "tgBridge.allowedChatIds": [987654321]
+  "codeBridge.botToken": "123456789:AAHk...",
+  "codeBridge.allowedChatIds": [987654321]
 }
 ```
 
 ### 4. Start the bridge
 
-Open the command palette and run **Telegram Bridge: Start**.
+Open the command palette and run **Code Bridge: Start**.
 
 The status bar shows `TG Bridge` when running.
 
@@ -68,7 +68,7 @@ For an extra layer of security, set a shared secret:
 
 ```json
 {
-  "tgBridge.authSecret": "my-secret-passphrase"
+  "codeBridge.authSecret": "my-secret-passphrase"
 }
 ```
 
@@ -130,22 +130,22 @@ Hooks are auto-deployed to `.cursor/hooks.json` and `.cursor/hooks/notify-telegr
 
 | Setting | Type | Default | Description |
 |---------|------|---------|-------------|
-| `tgBridge.botToken` | string | `""` | Telegram bot token from @BotFather |
-| `tgBridge.allowedChatIds` | number[] | `[]` | Allowed Telegram chat IDs (required) |
-| `tgBridge.autoStart` | boolean | `false` | Auto-start bridge on extension activation |
-| `tgBridge.authSecret` | string | `""` | Shared secret for `/auth` handshake |
-| `tgBridge.maxSessions` | number | `5` | Max concurrent terminal sessions |
-| `tgBridge.commandTimeoutSec` | number | `600` | Auto-kill timeout per `/run` command |
-| `tgBridge.responseTimeoutSec` | number | `300` | Agent response timeout |
-| `tgBridge.responseDirName` | string | `".tg-bridge"` | Workspace directory for bridge files |
+| `codeBridge.botToken` | string | `""` | Telegram bot token from @BotFather |
+| `codeBridge.allowedChatIds` | number[] | `[]` | Allowed Telegram chat IDs (required) |
+| `codeBridge.autoStart` | boolean | `false` | Auto-start bridge on extension activation |
+| `codeBridge.authSecret` | string | `""` | Shared secret for `/auth` handshake |
+| `codeBridge.maxSessions` | number | `5` | Max concurrent terminal sessions |
+| `codeBridge.commandTimeoutSec` | number | `600` | Auto-kill timeout per `/run` command |
+| `codeBridge.responseTimeoutSec` | number | `300` | Agent response timeout |
+| `codeBridge.responseDirName` | string | `".code-bridge"` | Workspace directory for bridge files |
 
 ## Extension Commands
 
 | Command | Description |
 |---------|-------------|
-| `Telegram Bridge: Start` | Start the Telegram bridge |
-| `Telegram Bridge: Stop` | Stop the bridge |
-| `Telegram Bridge: Status` | Show bridge status and allowed chat IDs |
+| `Code Bridge: Start` | Start the bridge |
+| `Code Bridge: Stop` | Stop the bridge |
+| `Code Bridge: Status` | Show bridge status and allowed chat IDs |
 
 ## Security
 
@@ -156,13 +156,13 @@ Hooks are auto-deployed to `.cursor/hooks.json` and `.cursor/hooks/notify-telegr
 - **Sanitized environment** — child processes only inherit safe env vars (PATH, HOME, LANG, tool paths). Secrets like GITHUB_TOKEN or AWS keys are stripped.
 - **Command timeout** — processes exceeding the timeout are auto-killed.
 - **Session cap** — limited concurrent sessions prevent resource exhaustion.
-- **Token file permissions** — `.tg-bridge/hook-config.json` is written with `chmod 600`.
-- **Gitignored** — `.tg-bridge/` is in `.gitignore` so tokens never enter version control.
+- **Token file permissions** — `.code-bridge/hook-config.json` is written with `chmod 600`.
+- **Gitignored** — `.code-bridge/` is in `.gitignore` so tokens never enter version control.
 
 ## Project Structure
 
 ```
-cursor-telegram-bridge/
+code-bridge/
   src/
     extension.ts          Entry point, lifecycle management
     config.ts             Settings reader
@@ -189,7 +189,7 @@ cursor-telegram-bridge/
     hooks.json            Cursor hook configuration
     hooks/
       notify-telegram.mjs Hook script for agent notifications
-  .tg-bridge/             (gitignored) runtime config + debug log
+  .code-bridge/           (gitignored) runtime config + debug log
   out/                    (gitignored) compiled JS
 ```
 

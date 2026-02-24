@@ -20,22 +20,22 @@ class BridgeRuntime implements vscode.Disposable {
             vscode.StatusBarAlignment.Right,
             100,
         );
-        this.statusBar.command = "tgBridge.status";
+        this.statusBar.command = "codeBridge.status";
         this.context.subscriptions.push(this.statusBar);
         this.renderStatus();
 
         this.context.subscriptions.push(
-            vscode.commands.registerCommand("tgBridge.start", async () =>
+            vscode.commands.registerCommand("codeBridge.start", async () =>
                 this.start(),
             ),
         );
         this.context.subscriptions.push(
-            vscode.commands.registerCommand("tgBridge.stop", async () =>
+            vscode.commands.registerCommand("codeBridge.stop", async () =>
                 this.stop(),
             ),
         );
         this.context.subscriptions.push(
-            vscode.commands.registerCommand("tgBridge.status", async () =>
+            vscode.commands.registerCommand("codeBridge.status", async () =>
                 this.showStatus(),
             ),
         );
@@ -49,7 +49,7 @@ class BridgeRuntime implements vscode.Disposable {
     public async start(): Promise<void> {
         if (this.running) {
             vscode.window.showInformationMessage(
-                "Telegram Bridge is already running.",
+                "Code Bridge is already running.",
             );
             return;
         }
@@ -57,21 +57,21 @@ class BridgeRuntime implements vscode.Disposable {
         const cfg = readConfig();
         if (!cfg.botToken) {
             vscode.window.showErrorMessage(
-                "Set tgBridge.botToken in settings before starting Telegram Bridge.",
+                "Set codeBridge.botToken in settings before starting Code Bridge.",
             );
             return;
         }
 
         if (!cfg.allowedChatIds.length) {
             vscode.window.showErrorMessage(
-                "Set tgBridge.allowedChatIds in settings before starting. The bridge refuses to start without at least one allowed chat ID.",
+                "Set codeBridge.allowedChatIds in settings before starting. The bridge refuses to start without at least one allowed chat ID.",
             );
             return;
         }
 
         if (!vscode.workspace.workspaceFolders?.length) {
             vscode.window.showErrorMessage(
-                "Open a workspace/folder before starting Telegram Bridge.",
+                "Open a workspace/folder before starting Code Bridge.",
             );
             return;
         }
@@ -79,7 +79,7 @@ class BridgeRuntime implements vscode.Disposable {
         const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
         if (!workspaceRoot) {
             vscode.window.showErrorMessage(
-                "Open a workspace/folder before starting Telegram Bridge.",
+                "Open a workspace/folder before starting Code Bridge.",
             );
             return;
         }
@@ -113,7 +113,7 @@ class BridgeRuntime implements vscode.Disposable {
             this.renderStatus();
             logInfo(`Bridge started in ${modeLabel}.`);
             void vscode.window.showInformationMessage(
-                `Telegram Bridge started (${modeLabel}).`,
+                `Code Bridge started (${modeLabel}).`,
             );
         } catch (err) {
             logError(`Failed starting Telegram bot: ${String(err)}`);
@@ -139,7 +139,7 @@ class BridgeRuntime implements vscode.Disposable {
     public async showStatus(): Promise<void> {
         const cfg = readConfig();
         const status = this.running ? "running" : "stopped";
-        const msg = `Telegram Bridge is ${status}. Allowed chat IDs: ${
+        const msg = `Code Bridge is ${status}. Allowed chat IDs: ${
             cfg.allowedChatIds.length ? cfg.allowedChatIds.join(", ") : "(none)"
         }`;
         void vscode.window.showInformationMessage(msg);
@@ -150,11 +150,11 @@ class BridgeRuntime implements vscode.Disposable {
             return;
         }
         if (this.running) {
-            this.statusBar.text = "$(broadcast) TG Bridge";
-            this.statusBar.tooltip = "Telegram Bridge running";
+            this.statusBar.text = "$(broadcast) Code Bridge";
+            this.statusBar.tooltip = "Code Bridge running";
         } else {
-            this.statusBar.text = "$(circle-slash) TG Bridge";
-            this.statusBar.tooltip = "Telegram Bridge stopped";
+            this.statusBar.text = "$(circle-slash) Code Bridge";
+            this.statusBar.tooltip = "Code Bridge stopped";
         }
         this.statusBar.show();
     }

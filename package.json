@@ -1,10 +1,14 @@
 {
-  "name": "cursor-telegram-bridge",
-  "displayName": "Cursor Telegram Bridge",
-  "description": "Bridge Telegram messages to Cursor/VS Code chat and return execution results.",
+  "name": "code-bridge",
+  "displayName": "Code Bridge",
+  "description": "Bridge chat interfaces (starting with Telegram) to Cursor/VS Code terminal and agent workflows.",
   "version": "0.1.0",
   "publisher": "local",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/namanbarkiya/code-bridge"
+  },
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -18,27 +22,27 @@
   "contributes": {
     "commands": [
       {
-        "command": "tgBridge.start",
-        "title": "Telegram Bridge: Start"
+        "command": "codeBridge.start",
+        "title": "Code Bridge: Start"
       },
       {
-        "command": "tgBridge.stop",
-        "title": "Telegram Bridge: Stop"
+        "command": "codeBridge.stop",
+        "title": "Code Bridge: Stop"
       },
       {
-        "command": "tgBridge.status",
-        "title": "Telegram Bridge: Status"
+        "command": "codeBridge.status",
+        "title": "Code Bridge: Status"
       }
     ],
     "configuration": {
-      "title": "Telegram Bridge",
+      "title": "Code Bridge",
       "properties": {
-        "tgBridge.botToken": {
+        "codeBridge.botToken": {
           "type": "string",
           "default": "",
           "description": "Telegram Bot token from @BotFather."
         },
-        "tgBridge.allowedChatIds": {
+        "codeBridge.allowedChatIds": {
           "type": "array",
           "items": {
             "type": "number"
@@ -46,35 +50,35 @@
           "default": [],
           "description": "Only these Telegram chat IDs can send messages to your local bridge."
         },
-        "tgBridge.autoStart": {
+        "codeBridge.autoStart": {
           "type": "boolean",
           "default": false,
           "description": "Start the bridge automatically when the extension activates."
         },
-        "tgBridge.responseTimeoutSec": {
+        "codeBridge.responseTimeoutSec": {
           "type": "number",
           "default": 300,
           "minimum": 10,
           "description": "Timeout in seconds for waiting on agent completion response."
         },
-        "tgBridge.responseDirName": {
+        "codeBridge.responseDirName": {
           "type": "string",
-          "default": ".tg-bridge",
+          "default": ".code-bridge",
           "description": "Workspace directory used for response files."
         },
-        "tgBridge.authSecret": {
+        "codeBridge.authSecret": {
           "type": "string",
           "default": "",
           "description": "Shared secret for Telegram auth. If set, users must send /auth <secret> before any commands are accepted."
         },
-        "tgBridge.maxSessions": {
+        "codeBridge.maxSessions": {
           "type": "number",
           "default": 5,
           "minimum": 1,
           "maximum": 20,
           "description": "Maximum number of concurrent terminal sessions."
         },
-        "tgBridge.commandTimeoutSec": {
+        "codeBridge.commandTimeoutSec": {
           "type": "number",
           "default": 600,
           "minimum": 10,

@@ -22,6 +22,21 @@ export class TelegramBotService {
       return;
     }
 
+    await this.bot.api.setMyCommands([
+      { command: "help", description: "Show available commands" },
+      { command: "auth", description: "Authenticate with shared secret" },
+      { command: "run", description: "Run a shell command" },
+      { command: "out", description: "Show latest terminal output" },
+      { command: "status", description: "Show active session status" },
+      { command: "pwd", description: "Show current working directory" },
+      { command: "cd", description: "Change directory (workspace only)" },
+      { command: "kill", description: "Stop running command" },
+      { command: "new", description: "Create a new terminal session" },
+      { command: "use", description: "Switch active terminal session" },
+      { command: "sessions", description: "List terminal sessions" },
+      { command: "agent", description: "Send a prompt to Cursor agent" }
+    ]);
+
     this.bot.on("message:text", async (ctx) => {
       const text = ctx.message.text.trim();
       const chatId = Number(ctx.chat.id);
@@ -29,7 +44,7 @@ export class TelegramBotService {
       if (!isAllowedChat(chatId, this.allowedChatIds)) {
         logWarn(`Rejected Telegram message from unauthorized chat ID: ${chatId}`);
         await ctx.reply(
-          `This chat is not authorized.\n\nYour chat ID is: ${chatId}\nAdd it to tgBridge.allowedChatIds in settings.`
+          `This chat is not authorized.\n\nYour chat ID is: ${chatId}\nAdd it to codeBridge.allowedChatIds in settings.`
         );
         return;
       }

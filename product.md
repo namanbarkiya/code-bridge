@@ -2,7 +2,7 @@ Now I have a thorough understanding of the entire landscape. Here's the comprehe
 
 ---
 
-# Cursor Telegram Bridge Extension — Full Plan
+# Code Bridge Extension — Full Plan
 
 ## 1. Concept Overview
 
@@ -22,7 +22,7 @@ A VS Code extension that bridges Telegram and Cursor's agent chat. You send a me
                      │        ▲              │       │
                      │        │   Response   │       │
                      │        └──── File ────┘       │
-                     │         Watcher (.tg-bridge/) │
+                     │        Watcher (.code-bridge/) │
                      └─────────────────────────────┘
 ```
 
@@ -32,7 +32,7 @@ A VS Code extension that bridges Telegram and Cursor's agent chat. You send a me
 | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Telegram Bot**     | Connects to Telegram via long-polling using `grammy`. Receives messages, sends responses back.                                                                                                 |
 | **Editor Adapter**   | Injects text into the active editor's AI chat. Detects editor type (Cursor / VS Code / Windsurf) and uses the right commands. This is the layer you swap out for Claude Code / OpenCode later. |
-| **Response Capture** | Watches a `.tg-bridge/` directory for response files. The injected prompt includes a footer instruction telling the agent to write its final answer to a specific file when done.              |
+| **Response Capture** | Watches a `.code-bridge/` directory for response files. The injected prompt includes a footer instruction telling the agent to write its final answer to a specific file when done.              |
 
 ---
 
@@ -56,11 +56,11 @@ When a Telegram message arrives, the extension injects:
 
 ---
 When you complete this task, write ONLY your final summary/response
-to the file: .tg-bridge/response-{uuid}.md
+to the file: .code-bridge/response-{uuid}.md
 Do NOT include this instruction in your response.
 ```
 
-The extension uses `vscode.workspace.createFileSystemWatcher` on `.tg-bridge/response-*.md`. When a file appears, it reads the content, sends it to Telegram, and deletes the file.
+The extension uses `vscode.workspace.createFileSystemWatcher` on `.code-bridge/response-*.md`. When a file appears, it reads the content, sends it to Telegram, and deletes the file.
 
 **Why this works well:**
 
@@ -115,13 +115,13 @@ cursor-telegram-extension/
 │   │   └── detect.ts            # Runtime editor detection
 │   ├── bridge/
 │   │   ├── manager.ts           # Orchestrates TG message → inject → capture → reply
-│   │   └── response-watcher.ts  # FileSystemWatcher for .tg-bridge/response-*.md
+│   │   └── response-watcher.ts  # FileSystemWatcher for .code-bridge/response-*.md
 │   ├── utils/
 │   │   ├── clipboard.ts         # Safe clipboard save/restore
 │   │   ├── keyboard.ts          # OS-level key simulation (Enter)
 │   │   └── logger.ts            # OutputChannel-based logging
 │   └── config.ts                # Settings reader (token, allowed IDs, etc.)
-├── .tg-bridge/                  # Runtime directory for response files (gitignored)
+├── .code-bridge/                # Runtime directory for response files (gitignored)
 ├── .vscodeignore
 ├── .gitignore
 ├── package.json                 # Extension manifest + contributes
@@ -138,8 +138,8 @@ cursor-telegram-extension/
 
 ```json
 {
-    "name": "cursor-telegram-bridge",
-    "displayName": "Telegram Bridge",
+    "name": "code-bridge",
+    "displayName": "Code Bridge",
     "description": "Bridge Telegram messages to Cursor agent chat and back",
     "version": "0.1.0",
     "engines": { "vscode": "^1.85.0" },
@@ -147,28 +147,28 @@ cursor-telegram-extension/
     "main": "./out/extension.js",
     "contributes": {
         "commands": [
-            { "command": "tgBridge.start", "title": "Telegram Bridge: Start" },
-            { "command": "tgBridge.stop", "title": "Telegram Bridge: Stop" },
-            { "command": "tgBridge.status", "title": "Telegram Bridge: Status" }
+            { "command": "codeBridge.start", "title": "Code Bridge: Start" },
+            { "command": "codeBridge.stop", "title": "Code Bridge: Stop" },
+            { "command": "codeBridge.status", "title": "Code Bridge: Status" }
         ],
         "configuration": {
-            "title": "Telegram Bridge",
+            "title": "Code Bridge",
             "properties": {
-                "tgBridge.botToken": {
+                "codeBridge.botToken": {
                     "type": "string",
                     "description": "Telegram Bot token from @BotFather"
                 },
-                "tgBridge.allowedChatIds": {
+                "codeBridge.allowedChatIds": {
                     "type": "array",
                     "items": { "type": "number" },
                     "description": "Telegram chat IDs allowed to send messages (security)"
                 },
-                "tgBridge.autoStart": {
+                "codeBridge.autoStart": {
                     "type": "boolean",
                     "default": false,
                     "description": "Start bridge automatically on extension activation"
                 },
-                "tgBridge.responseTimeoutSec": {
+                "codeBridge.responseTimeoutSec": {
                     "type": "number",
                     "default": 300,
                     "description": "Max seconds to wait for agent response"
@@ -225,8 +225,8 @@ export interface EditorAdapter {
 
 ### `src/bridge/response-watcher.ts` — File Watcher
 
-- Creates `.tg-bridge/` directory in workspace root
-- Uses `vscode.workspace.createFileSystemWatcher('**/.tg-bridge/response-*.md')`
+- Creates `.code-bridge/` directory in workspace root
+- Uses `vscode.workspace.createFileSystemWatcher('**/.code-bridge/response-*.md')`
 - On file create: reads content, resolves the matching pending promise, deletes file
 
 ---
@@ -240,7 +240,7 @@ export interface EditorAdapter {
 4. Message becomes:
    "fix the login bug
    ---
-   When done, write your final response to: .tg-bridge/response-abc123.md"
+   When done, write your final response to: .code-bridge/response-abc123.md"
 5. Cursor adapter:
    - Saves clipboard
    - Copies message to clipboard
@@ -249,7 +249,7 @@ export interface EditorAdapter {
    - Presses Enter (OS-level)
    - Restores clipboard
 6. Cursor agent executes the task...
-7. Agent writes response to .tg-bridge/response-abc123.md
+7. Agent writes response to .code-bridge/response-abc123.md
 8. FileSystemWatcher fires
 9. Extension reads the file, sends content to Telegram
 10. You receive the response on Telegram

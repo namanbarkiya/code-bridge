@@ -34,9 +34,9 @@ const projectDir =
   (input.workspace_roots && input.workspace_roots[0]) ||
   process.cwd();
 
-const configPath = join(projectDir, ".tg-bridge", "hook-config.json");
-const lastResponsePath = join(projectDir, ".tg-bridge", "last-response.txt");
-const debugPath = join(projectDir, ".tg-bridge", "debug.log");
+const configPath = join(projectDir, ".code-bridge", "hook-config.json");
+const lastResponsePath = join(projectDir, ".code-bridge", "last-response.txt");
+const debugPath = join(projectDir, ".code-bridge", "debug.log");
 
 function debug(msg) {
   try {
@@ -175,10 +175,10 @@ export async function writeHookConfig(cfg: BridgeConfig): Promise<void> {
   }
 
   try {
-    const tgBridgeDir = vscode.Uri.joinPath(folder.uri, cfg.responseDirName);
-    await vscode.workspace.fs.createDirectory(tgBridgeDir);
+    const bridgeDir = vscode.Uri.joinPath(folder.uri, cfg.responseDirName);
+    await vscode.workspace.fs.createDirectory(bridgeDir);
 
-    const configUri = vscode.Uri.joinPath(tgBridgeDir, "hook-config.json");
+    const configUri = vscode.Uri.joinPath(bridgeDir, "hook-config.json");
     const payload = { botToken: cfg.botToken, chatIds: cfg.allowedChatIds };
     await vscode.workspace.fs.writeFile(
       configUri,

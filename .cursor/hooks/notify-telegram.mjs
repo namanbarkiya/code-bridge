@@ -12,9 +12,9 @@ const projectDir =
   (input.workspace_roots && input.workspace_roots[0]) ||
   process.cwd();
 
-const configPath = join(projectDir, ".tg-bridge", "hook-config.json");
-const lastResponsePath = join(projectDir, ".tg-bridge", "last-response.txt");
-const debugPath = join(projectDir, ".tg-bridge", "debug.log");
+const configPath = join(projectDir, ".code-bridge", "hook-config.json");
+const lastResponsePath = join(projectDir, ".code-bridge", "last-response.txt");
+const debugPath = join(projectDir, ".code-bridge", "debug.log");
 
 function debug(msg) {
   try {

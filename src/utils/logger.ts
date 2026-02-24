@@ -4,7 +4,7 @@ let channel: vscode.OutputChannel | undefined;
 
 export function getLogger(): vscode.OutputChannel {
   if (!channel) {
-    channel = vscode.window.createOutputChannel("Telegram Bridge");
+    channel = vscode.window.createOutputChannel("Code Bridge");
   }
   return channel;
 }

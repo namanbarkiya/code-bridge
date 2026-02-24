@@ -1,10 +1,11 @@
 import * as vscode from "vscode";
 import { createAdapter } from "./adapters/detect";
+import { EditorAdapter } from "./adapters/types";
 import { BridgeManager } from "./bridge/manager";
 import { readConfig } from "./config";
 import { writeHookConfig } from "./hooks/config-writer";
 import { TelegramBotService } from "./telegram/bot";
-import { logError, logInfo } from "./utils/logger";
+import { logError, logInfo, logWarn } from "./utils/logger";
 
 class BridgeRuntime implements vscode.Disposable {
     private statusBar: vscode.StatusBarItem | undefined;
@@ -68,8 +69,13 @@ class BridgeRuntime implements vscode.Disposable {
             return;
         }
 
-        const adapter = await createAdapter();
-        await writeHookConfig(cfg);
+        const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+        if (!workspaceRoot) {
+            vscode.window.showErrorMessage(
+                "Open a workspace/folder before starting Telegram Bridge.",
+            );
+            return;
+        }
 
         this.telegram = new TelegramBotService(
             cfg.botToken,
@@ -81,15 +87,26 @@ class BridgeRuntime implements vscode.Disposable {
             },
         );
 
-        this.manager = new BridgeManager(adapter, this.telegram, cfg);
+        let modeLabel = "terminal mode";
+        let adapter: EditorAdapter | undefined;
+        try {
+            adapter = await createAdapter();
+            await writeHookConfig(cfg);
+            modeLabel = `terminal + agent (${adapter.editorId})`;
+            logInfo(`Agent bridge enabled using adapter: ${adapter.editorId}`);
+        } catch (err) {
+            logWarn(`Agent bridge unavailable; continuing in terminal-only mode: ${String(err)}`);
+        }
+
+        this.manager = new BridgeManager(this.telegram, workspaceRoot, adapter);
 
         try {
             await this.telegram.start();
             this.running = true;
             this.renderStatus();
-            logInfo(`Bridge started using adapter: ${adapter.editorId}`);
+            logInfo(`Bridge started in ${modeLabel}.`);
             void vscode.window.showInformationMessage(
-                `Telegram Bridge started (${adapter.editorId}).`,
+                `Telegram Bridge started (${modeLabel}).`,
             );
         } catch (err) {
             logError(`Failed starting Telegram bot: ${String(err)}`);

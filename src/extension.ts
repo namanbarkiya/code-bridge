@@ -3,6 +3,7 @@ import { createAdapter } from "./adapters/detect";
 import { BridgeManager } from "./bridge/manager";
 import { ResponseWatcher } from "./bridge/response-watcher";
 import { readConfig } from "./config";
+import { writeHookConfig } from "./hooks/config-writer";
 import { TelegramBotService } from "./telegram/bot";
 import { logError, logInfo } from "./utils/logger";
 
@@ -59,6 +60,8 @@ class BridgeRuntime implements vscode.Disposable {
     const adapter = await createAdapter();
     this.watcher = new ResponseWatcher(cfg.responseDirName);
     await this.watcher.start();
+
+    await writeHookConfig(cfg);
 
     this.telegram = new TelegramBotService(
       cfg.botToken,

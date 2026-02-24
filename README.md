@@ -58,7 +58,23 @@ A watcher picks this up and sends the content back to Telegram.
 - `Telegram Bridge: Stop`
 - `Telegram Bridge: Status`
 
+## Telegram Notifications When Agent Stops
+
+Uses Cursor Hooks (`stop` event) to send you a Telegram message **instantly** when the agent stops execution — whether it completed, errored, or is waiting for your approval.
+
+How it works:
+
+1. Extension writes `.tg-bridge/hook-config.json` (bot token + chat IDs) on start.
+2. `.cursor/hooks.json` registers a `stop` hook.
+3. `.cursor/hooks/notify-telegram.mjs` reads the config and calls the Telegram Bot API directly.
+4. You get a message like: `Stopped: Agent execution aborted. Please check Cursor and approve if needed.`
+
+No HTTP server, no polling. Cursor fires the hook, you get the notification.
+
+After first setup, **restart Cursor once** so `.cursor/hooks.json` is loaded.
+
 ## Notes
 
 - Cursor auto-submit uses OS-level Enter key simulation and may require Accessibility permission on macOS.
 - Open a workspace folder before starting the bridge.
+- The hook config file (`.tg-bridge/hook-config.json`) contains your bot token locally. It is gitignored.

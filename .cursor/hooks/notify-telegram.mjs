@@ -54,10 +54,14 @@ if (event === "afterAgentResponse") {
 
 if (event === "beforeShellExecution") {
   const cmd = input.command || "unknown command";
-  const text = `Approval needed: Agent wants to run:\n\n$ ${cmd}\n\nPlease open Cursor and click Run or Skip.`;
+
+  const text = `Approval needed: Agent wants to run:\n\n$ ${cmd}\n\nReply 'yes' to allow or 'no' to deny.`;
   for (const chatId of config.chatIds) {
     await sendTelegram(config.botToken, chatId, text);
   }
+
+  debug(`Sent approval notification for: ${cmd}`);
+
   hookOutput = { permission: "ask" };
   process.stdout.write(JSON.stringify(hookOutput));
   process.exit(0);
@@ -123,9 +127,6 @@ function readLastAssistantFromTranscript(transcriptPath) {
         }
         if (entry.type === "assistant" && entry.text) {
           lastAssistant = entry.text;
-        }
-        if (entry.type === "say" && entry.message) {
-          lastAssistant = entry.message;
         }
       } catch {}
     }

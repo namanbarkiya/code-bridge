@@ -21,7 +21,7 @@ const HOOKS_JSON = JSON.stringify(
 
 const HOOK_SCRIPT = `#!/usr/bin/env node
 
-import { readFileSync, writeFileSync, unlinkSync } from "node:fs";
+import { readFileSync, writeFileSync, unlinkSync, appendFileSync } from "node:fs";
 import { join } from "node:path";
 import https from "node:https";
 
@@ -35,6 +35,13 @@ const projectDir =
 
 const configPath = join(projectDir, ".tg-bridge", "hook-config.json");
 const lastResponsePath = join(projectDir, ".tg-bridge", "last-response.txt");
+const debugPath = join(projectDir, ".tg-bridge", "debug.log");
+
+function debug(msg) {
+  try {
+    appendFileSync(debugPath, "[" + new Date().toISOString() + "] " + msg + "\\n", "utf8");
+  } catch {}
+}
 
 let config;
 try {
@@ -49,12 +56,12 @@ if (!config.botToken || !config.chatIds?.length) {
 
 let hookOutput = {};
 
+debug("Event: " + event);
+
 if (event === "afterAgentResponse") {
   const agentText = input.text || "";
   if (agentText) {
-    try {
-      writeFileSync(lastResponsePath, agentText, "utf8");
-    } catch {}
+    try { writeFileSync(lastResponsePath, agentText, "utf8"); } catch {}
   }
   process.stdout.write(JSON.stringify(hookOutput));
   process.exit(0);
@@ -62,10 +69,14 @@ if (event === "afterAgentResponse") {
 
 if (event === "beforeShellExecution") {
   const cmd = input.command || "unknown command";
-  const text = "Approval needed: Agent wants to run:\\n\\n$ " + cmd + "\\n\\nPlease open Cursor and click Run or Skip.";
+
+  const text = "Approval needed: Agent wants to run:\\n\\n$ " + cmd + "\\n\\nReply 'yes' to allow or 'no' to deny.";
   for (const chatId of config.chatIds) {
     await sendTelegram(config.botToken, chatId, text);
   }
+
+  debug("Sent approval notification for: " + cmd);
+
   hookOutput = { permission: "ask" };
   process.stdout.write(JSON.stringify(hookOutput));
   process.exit(0);
@@ -73,26 +84,23 @@ if (event === "beforeShellExecution") {
 
 if (event === "stop") {
   const status = input.status || "unknown";
-
   let lastResponse = "";
   try {
     lastResponse = readFileSync(lastResponsePath, "utf8").trim();
     unlinkSync(lastResponsePath);
   } catch {}
 
+  if (!lastResponse && input.transcript_path) {
+    lastResponse = readLastAssistantFromTranscript(input.transcript_path);
+  }
+
   let text;
   if (status === "completed") {
-    text = lastResponse
-      ? "Agent completed:\\n\\n" + lastResponse
-      : "Agent finished execution successfully.";
+    text = lastResponse ? "Agent completed:\\n\\n" + lastResponse : "Agent finished execution successfully.";
   } else if (status === "error") {
-    text = lastResponse
-      ? "Agent error:\\n\\n" + lastResponse
-      : "Agent encountered an error. Please check Cursor.";
+    text = lastResponse ? "Agent error:\\n\\n" + lastResponse : "Agent encountered an error. Please check Cursor.";
   } else {
-    text = lastResponse
-      ? "Agent stopped:\\n\\n" + lastResponse
-      : "Agent stopped. Please check Cursor.";
+    text = lastResponse ? "Agent stopped:\\n\\n" + lastResponse : "Agent stopped. Please check Cursor.";
   }
 
   for (const chatId of config.chatIds) {
@@ -102,6 +110,23 @@ if (event === "stop") {
 
 process.stdout.write(JSON.stringify(hookOutput));
 process.exit(0);
+
+function readLastAssistantFromTranscript(transcriptPath) {
+  try {
+    const raw = readFileSync(transcriptPath, "utf8").trim();
+    if (!raw) return "";
+    const lines = raw.split("\\n");
+    let last = "";
+    for (const line of lines) {
+      try {
+        const e = JSON.parse(line);
+        if (e.role === "assistant" && e.content) last = typeof e.content === "string" ? e.content : JSON.stringify(e.content);
+        if (e.type === "assistant" && e.text) last = e.text;
+      } catch {}
+    }
+    return last.trim();
+  } catch { return ""; }
+}
 
 async function sendTelegram(token, chatId, message) {
   if (message.length > 4000) {
@@ -165,21 +190,13 @@ export async function writeHookConfig(cfg: BridgeConfig): Promise<void> {
     await vscode.workspace.fs.createDirectory(hooksDir);
 
     const hooksJsonUri = vscode.Uri.joinPath(cursorDir, "hooks.json");
-    await writeIfMissing(hooksJsonUri, HOOKS_JSON);
+    await vscode.workspace.fs.writeFile(hooksJsonUri, Buffer.from(HOOKS_JSON, "utf8"));
+    logInfo(`Hooks config written to ${hooksJsonUri.fsPath}`);
 
     const scriptUri = vscode.Uri.joinPath(hooksDir, "notify-telegram.mjs");
     await vscode.workspace.fs.writeFile(scriptUri, Buffer.from(HOOK_SCRIPT, "utf8"));
     logInfo(`Hook script written to ${scriptUri.fsPath}`);
   } catch (err) {
     logError(`Failed writing hook files: ${String(err)}`);
-  }
-}
-
-async function writeIfMissing(uri: vscode.Uri, content: string): Promise<void> {
-  try {
-    await vscode.workspace.fs.stat(uri);
-  } catch {
-    await vscode.workspace.fs.writeFile(uri, Buffer.from(content, "utf8"));
-    logInfo(`Created ${uri.fsPath}`);
   }
 }

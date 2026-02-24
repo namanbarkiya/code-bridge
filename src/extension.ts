@@ -1,7 +1,6 @@
 import * as vscode from "vscode";
 import { createAdapter } from "./adapters/detect";
 import { BridgeManager } from "./bridge/manager";
-import { ResponseWatcher } from "./bridge/response-watcher";
 import { readConfig } from "./config";
 import { writeHookConfig } from "./hooks/config-writer";
 import { TelegramBotService } from "./telegram/bot";
@@ -9,7 +8,6 @@ import { logError, logInfo } from "./utils/logger";
 
 class BridgeRuntime implements vscode.Disposable {
   private statusBar: vscode.StatusBarItem | undefined;
-  private watcher: ResponseWatcher | undefined;
   private telegram: TelegramBotService | undefined;
   private manager: BridgeManager | undefined;
   private running = false;
@@ -58,23 +56,19 @@ class BridgeRuntime implements vscode.Disposable {
     }
 
     const adapter = await createAdapter();
-    this.watcher = new ResponseWatcher(cfg.responseDirName);
-    await this.watcher.start();
-
     await writeHookConfig(cfg);
 
     this.telegram = new TelegramBotService(
       cfg.botToken,
       cfg.allowedChatIds,
       async (message) => {
-        if (!this.manager) {
-          return;
+        if (this.manager) {
+          await this.manager.onIncomingMessage(message);
         }
-        await this.manager.onIncomingMessage(message);
       }
     );
 
-    this.manager = new BridgeManager(adapter, this.watcher, this.telegram, cfg);
+    this.manager = new BridgeManager(adapter, this.telegram);
 
     try {
       await this.telegram.start();
@@ -98,9 +92,7 @@ class BridgeRuntime implements vscode.Disposable {
     }
 
     await this.telegram?.stop();
-    await this.watcher?.dispose();
     this.telegram = undefined;
-    this.watcher = undefined;
     this.manager = undefined;
     this.running = false;
     this.renderStatus();

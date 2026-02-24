@@ -9,6 +9,9 @@ const HOOKS_JSON = JSON.stringify(
       beforeShellExecution: [
         { command: "node .cursor/hooks/notify-telegram.mjs", timeout: 10 }
       ],
+      afterAgentResponse: [
+        { command: "node .cursor/hooks/notify-telegram.mjs" }
+      ],
       stop: [{ command: "node .cursor/hooks/notify-telegram.mjs" }]
     }
   },
@@ -18,7 +21,7 @@ const HOOKS_JSON = JSON.stringify(
 
 const HOOK_SCRIPT = `#!/usr/bin/env node
 
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import https from "node:https";
 
@@ -31,6 +34,7 @@ const projectDir =
   process.cwd();
 
 const configPath = join(projectDir, ".tg-bridge", "hook-config.json");
+const lastResponsePath = join(projectDir, ".tg-bridge", "last-response.txt");
 
 let config;
 try {
@@ -43,34 +47,66 @@ if (!config.botToken || !config.chatIds?.length) {
   process.exit(0);
 }
 
-let text;
 let hookOutput = {};
+
+if (event === "afterAgentResponse") {
+  const agentText = input.text || "";
+  if (agentText) {
+    try {
+      writeFileSync(lastResponsePath, agentText, "utf8");
+    } catch {}
+  }
+  process.stdout.write(JSON.stringify(hookOutput));
+  process.exit(0);
+}
 
 if (event === "beforeShellExecution") {
   const cmd = input.command || "unknown command";
-  text = "Approval needed: Agent wants to run:\\n\\n$ " + cmd + "\\n\\nPlease open Cursor and click Run or Skip.";
-  hookOutput = { permission: "ask" };
-} else if (event === "stop") {
-  const status = input.status || "unknown";
-  if (status === "completed") {
-    text = "Agent finished execution successfully.";
-  } else if (status === "error") {
-    text = "Agent encountered an error. Please check Cursor.";
-  } else {
-    text = "Agent stopped. Please check Cursor.";
+  const text = "Approval needed: Agent wants to run:\\n\\n$ " + cmd + "\\n\\nPlease open Cursor and click Run or Skip.";
+  for (const chatId of config.chatIds) {
+    await sendTelegram(config.botToken, chatId, text);
   }
-} else {
-  text = "Agent event: " + event + ". Please check Cursor.";
+  hookOutput = { permission: "ask" };
+  process.stdout.write(JSON.stringify(hookOutput));
+  process.exit(0);
 }
 
-for (const chatId of config.chatIds) {
-  await sendTelegram(config.botToken, chatId, text);
+if (event === "stop") {
+  const status = input.status || "unknown";
+
+  let lastResponse = "";
+  try {
+    lastResponse = readFileSync(lastResponsePath, "utf8").trim();
+    unlinkSync(lastResponsePath);
+  } catch {}
+
+  let text;
+  if (status === "completed") {
+    text = lastResponse
+      ? "Agent completed:\\n\\n" + lastResponse
+      : "Agent finished execution successfully.";
+  } else if (status === "error") {
+    text = lastResponse
+      ? "Agent error:\\n\\n" + lastResponse
+      : "Agent encountered an error. Please check Cursor.";
+  } else {
+    text = lastResponse
+      ? "Agent stopped:\\n\\n" + lastResponse
+      : "Agent stopped. Please check Cursor.";
+  }
+
+  for (const chatId of config.chatIds) {
+    await sendTelegram(config.botToken, chatId, text);
+  }
 }
 
 process.stdout.write(JSON.stringify(hookOutput));
 process.exit(0);
 
 async function sendTelegram(token, chatId, message) {
+  if (message.length > 4000) {
+    message = message.slice(0, 4000) + "\\n\\n... (truncated)";
+  }
   const payload = JSON.stringify({ chat_id: chatId, text: message });
   const options = {
     hostname: "api.telegram.org",

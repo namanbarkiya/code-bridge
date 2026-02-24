@@ -7,6 +7,11 @@
         "timeout": 10
       }
     ],
+    "afterAgentResponse": [
+      {
+        "command": "node .cursor/hooks/notify-telegram.mjs"
+      }
+    ],
     "stop": [
       {
         "command": "node .cursor/hooks/notify-telegram.mjs"

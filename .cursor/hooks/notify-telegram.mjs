@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync, unlinkSync, appendFileSync } from "node:fs";
 import { join } from "node:path";
 import https from "node:https";
 
@@ -13,6 +13,14 @@ const projectDir =
   process.cwd();
 
 const configPath = join(projectDir, ".tg-bridge", "hook-config.json");
+const lastResponsePath = join(projectDir, ".tg-bridge", "last-response.txt");
+const debugPath = join(projectDir, ".tg-bridge", "debug.log");
+
+function debug(msg) {
+  try {
+    appendFileSync(debugPath, `[${new Date().toISOString()}] ${msg}\n`, "utf8");
+  } catch {}
+}
 
 let config;
 try {
@@ -25,34 +33,114 @@ if (!config.botToken || !config.chatIds?.length) {
   process.exit(0);
 }
 
-let text;
 let hookOutput = {};
+
+debug(`Event: ${event}, keys: ${Object.keys(input).join(", ")}`);
+
+if (event === "afterAgentResponse") {
+  const agentText = input.text || "";
+  debug(`afterAgentResponse text length: ${agentText.length}`);
+  if (agentText) {
+    try {
+      writeFileSync(lastResponsePath, agentText, "utf8");
+      debug("Wrote last-response.txt");
+    } catch (err) {
+      debug(`Failed writing last-response.txt: ${err}`);
+    }
+  }
+  process.stdout.write(JSON.stringify(hookOutput));
+  process.exit(0);
+}
 
 if (event === "beforeShellExecution") {
   const cmd = input.command || "unknown command";
-  text = `Approval needed: Agent wants to run:\n\n$ ${cmd}\n\nPlease open Cursor and click Run or Skip.`;
-  hookOutput = { permission: "ask" };
-} else if (event === "stop") {
-  const status = input.status || "unknown";
-  if (status === "completed") {
-    text = "Agent finished execution successfully.";
-  } else if (status === "error") {
-    text = "Agent encountered an error. Please check Cursor.";
-  } else {
-    text = "Agent stopped. Please check Cursor.";
+  const text = `Approval needed: Agent wants to run:\n\n$ ${cmd}\n\nPlease open Cursor and click Run or Skip.`;
+  for (const chatId of config.chatIds) {
+    await sendTelegram(config.botToken, chatId, text);
   }
-} else {
-  text = `Agent event: ${event}. Please check Cursor.`;
+  hookOutput = { permission: "ask" };
+  process.stdout.write(JSON.stringify(hookOutput));
+  process.exit(0);
 }
 
-for (const chatId of config.chatIds) {
-  await sendTelegram(config.botToken, chatId, text);
+if (event === "stop") {
+  const status = input.status || "unknown";
+
+  let lastResponse = "";
+
+  try {
+    lastResponse = readFileSync(lastResponsePath, "utf8").trim();
+    unlinkSync(lastResponsePath);
+    debug(`Read last-response.txt (${lastResponse.length} chars)`);
+  } catch {
+    debug("No last-response.txt found, trying transcript");
+  }
+
+  if (!lastResponse && input.transcript_path) {
+    debug(`Trying transcript: ${input.transcript_path}`);
+    lastResponse = readLastAssistantFromTranscript(input.transcript_path);
+    debug(`Transcript result: ${lastResponse.length} chars`);
+  }
+
+  let text;
+  if (status === "completed") {
+    text = lastResponse
+      ? `Agent completed:\n\n${lastResponse}`
+      : "Agent finished execution successfully.";
+  } else if (status === "error") {
+    text = lastResponse
+      ? `Agent error:\n\n${lastResponse}`
+      : "Agent encountered an error. Please check Cursor.";
+  } else {
+    text = lastResponse
+      ? `Agent stopped:\n\n${lastResponse}`
+      : "Agent stopped. Please check Cursor.";
+  }
+
+  for (const chatId of config.chatIds) {
+    await sendTelegram(config.botToken, chatId, text);
+  }
 }
 
 process.stdout.write(JSON.stringify(hookOutput));
 process.exit(0);
 
+function readLastAssistantFromTranscript(transcriptPath) {
+  try {
+    const raw = readFileSync(transcriptPath, "utf8").trim();
+    if (!raw) return "";
+
+    const lines = raw.split("\n");
+    let lastAssistant = "";
+
+    for (const line of lines) {
+      try {
+        const entry = JSON.parse(line);
+        if (entry.role === "assistant" && entry.content) {
+          lastAssistant = typeof entry.content === "string"
+            ? entry.content
+            : JSON.stringify(entry.content);
+        }
+        if (entry.type === "assistant" && entry.text) {
+          lastAssistant = entry.text;
+        }
+        if (entry.type === "say" && entry.message) {
+          lastAssistant = entry.message;
+        }
+      } catch {}
+    }
+
+    return lastAssistant.trim();
+  } catch (err) {
+    debug(`Transcript read error: ${err}`);
+    return "";
+  }
+}
+
 async function sendTelegram(token, chatId, message) {
+  if (message.length > 4000) {
+    message = message.slice(0, 4000) + "\n\n... (truncated)";
+  }
   const payload = JSON.stringify({ chat_id: chatId, text: message });
   const options = {
     hostname: "api.telegram.org",

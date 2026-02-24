@@ -2,7 +2,7 @@ import { v4 as uuidv4 } from "uuid";
 import { EditorAdapter } from "../adapters/types";
 import { BridgeConfig, IncomingTelegramMessage } from "../types";
 import { TelegramBotService } from "../telegram/bot";
-import { logInfo } from "../utils/logger";
+import { logInfo, logWarn } from "../utils/logger";
 import { ResponseWatcher } from "./response-watcher";
 
 export class BridgeManager {
@@ -10,7 +10,6 @@ export class BridgeManager {
   private readonly watcher: ResponseWatcher;
   private readonly telegram: TelegramBotService;
   private readonly config: BridgeConfig;
-  private queue: Promise<void> = Promise.resolve();
 
   public constructor(
     adapter: EditorAdapter,
@@ -24,16 +23,8 @@ export class BridgeManager {
     this.config = config;
   }
 
-  public onIncomingMessage(message: IncomingTelegramMessage): Promise<void> {
-    this.queue = this.queue
-      .then(async () => this.handleMessage(message))
-      .catch(async (err) => {
-        await this.telegram.sendMessage(
-          message.chatId,
-          `Bridge error: ${err instanceof Error ? err.message : String(err)}`
-        );
-      });
-    return this.queue;
+  public async onIncomingMessage(message: IncomingTelegramMessage): Promise<void> {
+    void this.handleMessage(message);
   }
 
   private async handleMessage(message: IncomingTelegramMessage): Promise<void> {
@@ -50,19 +41,26 @@ export class BridgeManager {
       "Received. Sending to agent chat now..."
     );
 
-    const responsePromise = this.watcher.waitForResponse(id, this.config.responseTimeoutSec);
-    await this.adapter.inject(prompt);
+    try {
+      await this.adapter.inject(prompt);
+    } catch (err) {
+      await this.telegram.sendMessage(
+        message.chatId,
+        `Failed to inject message into chat: ${err instanceof Error ? err.message : String(err)}`
+      );
+      return;
+    }
 
     try {
-      const response = await responsePromise;
+      const response = await this.watcher.waitForResponse(id, this.config.responseTimeoutSec);
       await this.telegram.sendMessage(message.chatId, response);
     } catch (err) {
+      logWarn(`Response wait failed for ${id}: ${String(err)}`);
       await this.telegram.sendMessage(
         message.chatId,
         `No response file received within ${this.config.responseTimeoutSec}s.\n` +
           `Expected file: ${responsePath}`
       );
-      throw err;
     }
   }
 }

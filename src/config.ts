@@ -10,6 +10,9 @@ export function readConfig(): BridgeConfig {
     allowedChatIds: cfg.get<number[]>("allowedChatIds", []),
     autoStart: cfg.get<boolean>("autoStart", false),
     responseTimeoutSec: cfg.get<number>("responseTimeoutSec", 300),
-    responseDirName: cfg.get<string>("responseDirName", ".tg-bridge")
+    responseDirName: cfg.get<string>("responseDirName", ".tg-bridge"),
+    authSecret: cfg.get<string>("authSecret", "").trim(),
+    maxSessions: cfg.get<number>("maxSessions", 5),
+    commandTimeoutSec: cfg.get<number>("commandTimeoutSec", 600),
   };
 }

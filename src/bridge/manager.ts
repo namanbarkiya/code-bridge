@@ -1,9 +1,9 @@
 import * as path from "node:path";
 import { EditorAdapter } from "../adapters/types";
-import { IncomingTelegramMessage } from "../types";
+import { BridgeConfig, IncomingTelegramMessage } from "../types";
 import { TelegramBotService } from "../telegram/bot";
-import { TerminalSession } from "../terminal/session";
-import { logInfo } from "../utils/logger";
+import { TerminalSession, isCommandDenied } from "../terminal/session";
+import { logInfo, logWarn } from "../utils/logger";
 import { pressEnterInForeground, pressEscapeInForeground, sleep } from "../utils/keyboard";
 
 export class BridgeManager {
@@ -11,15 +11,27 @@ export class BridgeManager {
   private readonly sessions = new Map<string, TerminalSession>();
   private activeSessionName = "default";
   private readonly agentAdapter: EditorAdapter | undefined;
+  private readonly workspaceRoot: string;
+  private readonly config: BridgeConfig;
+
+  private readonly authenticatedChats = new Set<number>();
+  private pendingApproval = false;
 
   public constructor(
     telegram: TelegramBotService,
     workspaceRoot: string,
+    config: BridgeConfig,
     agentAdapter?: EditorAdapter
   ) {
     this.telegram = telegram;
+    this.workspaceRoot = workspaceRoot;
+    this.config = config;
     this.agentAdapter = agentAdapter;
     this.sessions.set(this.activeSessionName, new TerminalSession(workspaceRoot));
+  }
+
+  public setPendingApproval(pending: boolean): void {
+    this.pendingApproval = pending;
   }
 
   public async onIncomingMessage(message: IncomingTelegramMessage): Promise<void> {
@@ -30,8 +42,26 @@ export class BridgeManager {
       return;
     }
 
+    if (textLower.startsWith("/auth ")) {
+      await this.handleAuth(message.chatId, text.slice(6).trim());
+      return;
+    }
+
+    if (this.config.authSecret && !this.authenticatedChats.has(message.chatId)) {
+      await this.telegram.sendMessage(
+        message.chatId,
+        "Not authenticated. Send /auth <secret> first."
+      );
+      return;
+    }
+
     if (textLower === "yes" || textLower === "y" || textLower === "run") {
+      if (!this.pendingApproval) {
+        await this.telegram.sendMessage(message.chatId, "No pending approval to confirm.");
+        return;
+      }
       logInfo("Telegram approval: pressing Run (Enter) in Cursor");
+      this.pendingApproval = false;
       await sleep(300);
       await pressEnterInForeground();
       await this.telegram.sendMessage(message.chatId, "Approved. Pressed Run.");
@@ -39,7 +69,12 @@ export class BridgeManager {
     }
 
     if (textLower === "no" || textLower === "n" || textLower === "deny" || textLower === "skip") {
+      if (!this.pendingApproval) {
+        await this.telegram.sendMessage(message.chatId, "No pending approval to deny.");
+        return;
+      }
       logInfo("Telegram denial: pressing Skip (Escape) in Cursor");
+      this.pendingApproval = false;
       await sleep(300);
       await pressEscapeInForeground();
       await this.telegram.sendMessage(message.chatId, "Denied. Pressed Skip.");
@@ -47,23 +82,26 @@ export class BridgeManager {
     }
 
     if (text === "/help") {
+      const authLine = this.config.authSecret ? "/auth <secret> - authenticate session\n" : "";
       await this.telegram.sendMessage(
         message.chatId,
         [
-          "Terminal commands:",
-          "/new <name> - create a new terminal session",
-          "/use <name> - switch active session",
-          "/sessions - list sessions",
-          "/run <command> - run command in current session directory",
-          "/out - fetch latest output snapshot",
-          "/status - show running/idle status",
-          "/pwd - show current working directory",
-          "/cd <path> - change session directory",
+          "Commands:",
+          authLine,
+          "Terminal:",
+          "/run <command> - run command",
+          "/out - latest output",
+          "/status - session status",
+          "/pwd - working directory",
+          "/cd <path> - change directory (workspace only)",
           "/kill - stop running command",
+          "/new <name> - new terminal session",
+          "/use <name> - switch session",
+          "/sessions - list sessions",
           "",
-          "Agent command:",
-          "/agent <message> - send message to Cursor agent",
-          "yes/no - approve or skip pending Cursor shell confirmation"
+          "Agent:",
+          "/agent <message> - send to Cursor agent",
+          "yes/no - approve/skip pending confirmation"
         ].join("\n")
       );
       return;
@@ -87,16 +125,15 @@ export class BridgeManager {
         );
         return;
       }
-      await this.telegram.sendMessage(
-        message.chatId,
-        "Received. Sending to agent chat now..."
-      );
+      await this.telegram.sendMessage(message.chatId, "Received. Sending to agent chat now...");
+      this.pendingApproval = true;
       try {
         await this.agentAdapter.inject(prompt);
       } catch (err) {
+        this.pendingApproval = false;
         await this.telegram.sendMessage(
           message.chatId,
-          `Failed to inject message into chat: ${err instanceof Error ? err.message : String(err)}`
+          `Failed to inject: ${err instanceof Error ? err.message : String(err)}`
         );
       }
       return;
@@ -134,7 +171,7 @@ export class BridgeManager {
       });
       await this.telegram.sendMessage(
         message.chatId,
-        `Sessions:\n${lines.join("\n")}`
+        `Sessions (${this.sessions.size}/${this.config.maxSessions}):\n${lines.join("\n")}`
       );
       return;
     }
@@ -149,12 +186,19 @@ export class BridgeManager {
       if (!this.isValidSessionName(name)) {
         await this.telegram.sendMessage(
           message.chatId,
-          "Invalid session name. Use letters, numbers, '-', '_' (max 32 chars)."
+          "Invalid name. Use letters, numbers, '-', '_' (max 32 chars)."
         );
         return;
       }
       if (this.sessions.has(name)) {
         await this.telegram.sendMessage(message.chatId, `Session already exists: ${name}`);
+        return;
+      }
+      if (this.sessions.size >= this.config.maxSessions) {
+        await this.telegram.sendMessage(
+          message.chatId,
+          `Session limit reached (${this.config.maxSessions}). Kill or reuse an existing session.`
+        );
         return;
       }
       this.sessions.set(name, new TerminalSession(this.currentSession.cwd));
@@ -200,12 +244,22 @@ export class BridgeManager {
       const nextDir = path.isAbsolute(raw)
         ? raw
         : path.resolve(this.currentSession.cwd, raw);
-      const changed = this.currentSession.setCwd(nextDir);
+
+      const resolved = path.resolve(nextDir);
+      if (!resolved.startsWith(this.workspaceRoot)) {
+        await this.telegram.sendMessage(
+          message.chatId,
+          this.formatWithSession(`Denied: path is outside workspace root (${this.workspaceRoot})`)
+        );
+        return;
+      }
+
+      const changed = this.currentSession.setCwd(resolved);
       await this.telegram.sendMessage(
         message.chatId,
         changed
           ? this.formatWithSession(`cwd changed to ${this.currentSession.cwd}`)
-          : this.formatWithSession(`Cannot access directory: ${nextDir}`)
+          : this.formatWithSession(`Cannot access directory: ${resolved}`)
       );
       return;
     }
@@ -233,6 +287,13 @@ export class BridgeManager {
         return;
       }
 
+      const denied = isCommandDenied(command);
+      if (denied) {
+        logWarn(`Blocked command from chat ${message.chatId}: ${command}`);
+        await this.telegram.sendMessage(message.chatId, denied);
+        return;
+      }
+
       if (this.currentSession.isRunning()) {
         await this.telegram.sendMessage(
           message.chatId,
@@ -241,21 +302,35 @@ export class BridgeManager {
         return;
       }
 
-      logInfo(`Running Telegram terminal command [${this.activeSessionName}]: ${command}`);
-      this.currentSession.startCommand(command);
+      logInfo(`Running terminal command [${this.activeSessionName}]: ${command}`);
+      const sessionName = this.activeSessionName;
+      this.currentSession.startCommand(command, this.config.commandTimeoutSec);
       await this.telegram.sendMessage(
         message.chatId,
         this.formatWithSession(
-          `Started command in ${this.currentSession.cwd}:\n$ ${command}\n\nUse /out to fetch output.`
+          `Started in ${this.currentSession.cwd}:\n$ ${command}\n\nTimeout: ${this.config.commandTimeoutSec}s. Use /out to fetch output.`
         )
       );
+      void this.sendDelayedRunOutput(message.chatId, sessionName);
       return;
     }
 
-    await this.telegram.sendMessage(
-      message.chatId,
-      "Unknown command. Use /help."
-    );
+    await this.telegram.sendMessage(message.chatId, "Unknown command. Use /help.");
+  }
+
+  private async handleAuth(chatId: number, secret: string): Promise<void> {
+    if (!this.config.authSecret) {
+      await this.telegram.sendMessage(chatId, "Auth is not configured. All allowed chats have access.");
+      return;
+    }
+    if (secret === this.config.authSecret) {
+      this.authenticatedChats.add(chatId);
+      logInfo(`Chat ${chatId} authenticated successfully.`);
+      await this.telegram.sendMessage(chatId, "Authenticated successfully.");
+    } else {
+      logWarn(`Failed auth attempt from chat ${chatId}.`);
+      await this.telegram.sendMessage(chatId, "Invalid secret.");
+    }
   }
 
   private get currentSession(): TerminalSession {
@@ -272,5 +347,15 @@ export class BridgeManager {
 
   private isValidSessionName(name: string): boolean {
     return /^[a-zA-Z0-9_-]{1,32}$/.test(name);
+  }
+
+  private async sendDelayedRunOutput(chatId: number, sessionName: string): Promise<void> {
+    await sleep(3000);
+    const session = this.sessions.get(sessionName);
+    if (!session) {
+      return;
+    }
+    const snapshot = session.getOutputSnapshot();
+    await this.telegram.sendMessage(chatId, `[session: ${sessionName}]\n${snapshot}`);
   }
 }

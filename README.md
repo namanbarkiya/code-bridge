@@ -1,80 +1,206 @@
 # Cursor Telegram Bridge
 
-Simple pass-through bridge between Telegram and local AI chat in Cursor/VS Code.
+Control your Cursor/VS Code editor remotely from Telegram. Run terminal commands, send prompts to the Cursor AI agent, and approve or deny agent actions — all from your phone.
 
-## What it does
+No extra AI layer. Messages go straight through; terminal output comes straight back.
 
-- Receives your Telegram message via bot token from @BotFather.
-- Injects the message into Cursor agent chat (or VS Code chat fallback).
-- Waits for agent completion by watching a response file.
-- Sends the final response text back to your Telegram chat.
+## Features
 
-No extra AI is added by this extension.
+**Terminal control** — run shell commands in your workspace and fetch output on demand.
+
+**Multi-session** — create named terminal sessions (`/new backend`, `/new frontend`) and switch between them.
+
+**Cursor agent bridge** — send prompts to the Cursor AI agent and receive completion notifications when it finishes.
+
+**Approval flow** — get notified on Telegram when the agent wants to run a command. Reply `yes` or `no` to approve or skip.
+
+**Security hardened** — chat ID allowlist, optional shared-secret auth, command denylist, workspace-restricted paths, sanitized environment, command timeouts, and session caps.
+
+## Prerequisites
+
+- [Cursor](https://cursor.sh) or VS Code `>=1.85.0`
+- Node.js `>=18`
+- A Telegram bot token from [@BotFather](https://t.me/BotFather)
+- macOS Accessibility permission for Cursor (required for agent injection and approval keypress simulation)
 
 ## Setup
 
-1. Install dependencies and build:
-   - `npm install`
-   - `npm run build`
-2. Start extension development host from Run and Debug (`Run Extension`).
-3. Complete Telegram bot setup (section below).
-4. Open Settings and configure:
-   - `tgBridge.botToken`
-   - `tgBridge.allowedChatIds` (your Telegram chat ID)
-5. Run command: `Telegram Bridge: Start`.
+### 1. Create a Telegram bot
 
-## Telegram Bot Setup (BotFather)
+1. Open Telegram and message [@BotFather](https://t.me/BotFather).
+2. Send `/newbot`.
+3. Choose a display name (e.g. `Cursor Bridge Bot`).
+4. Choose a username ending in `bot` (e.g. `my_cursor_bridge_bot`).
+5. BotFather replies with a token like `123456789:AAHk...`. Copy it.
 
-1. Open Telegram and search for `@BotFather`.
-2. Send `/start`.
-3. Send `/newbot`.
-4. Enter a display name (example: `Cursor Bridge Bot`).
-5. Enter a unique username that ends with `bot` (example: `cursor_bridge_demo_bot`).
-6. BotFather returns a token like:
-   - `123456789:AA...`
-7. Copy this token and set it in `tgBridge.botToken`.
+### 2. Get your chat ID
 
-## Get Your Telegram Chat ID
+1. Send any message to your new bot.
+2. The bot replies: `This chat is not authorized. Your chat ID is: 987654321`.
+3. Copy that number.
 
-1. Send any message to your new bot (example: `hello`).
-2. If your chat ID is not allowlisted yet, the extension replies with:
-   - `Your chat ID is: <number>`
-3. Copy that number and set it in:
-   - `tgBridge.allowedChatIds`
-4. Use an array format in settings, for example:
-   - `[123456789]`
+### 3. Install and configure the extension
 
-## How response return works
+```bash
+cd cursor-telegram-bridge
+npm install
+npm run build
+```
 
-The extension appends an instruction to your prompt asking the agent to write final output to:
+Open Cursor Settings (JSON) and add:
 
-`.tg-bridge/response-<id>.md`
+```json
+{
+  "tgBridge.botToken": "123456789:AAHk...",
+  "tgBridge.allowedChatIds": [987654321]
+}
+```
 
-A watcher picks this up and sends the content back to Telegram.
+### 4. Start the bridge
 
-## Commands
+Open the command palette and run **Telegram Bridge: Start**.
 
-- `Telegram Bridge: Start`
-- `Telegram Bridge: Stop`
-- `Telegram Bridge: Status`
+The status bar shows `TG Bridge` when running.
 
-## Telegram Notifications When Agent Stops
+### 5. (Optional) Enable auth secret
 
-Uses Cursor Hooks (`stop` event) to send you a Telegram message **instantly** when the agent stops execution — whether it completed, errored, or is waiting for your approval.
+For an extra layer of security, set a shared secret:
 
-How it works:
+```json
+{
+  "tgBridge.authSecret": "my-secret-passphrase"
+}
+```
 
-1. Extension writes `.tg-bridge/hook-config.json` (bot token + chat IDs) on start.
-2. `.cursor/hooks.json` registers a `stop` hook.
-3. `.cursor/hooks/notify-telegram.mjs` reads the config and calls the Telegram Bot API directly.
-4. You get a message like: `Stopped: Agent execution aborted. Please check Cursor and approve if needed.`
+When set, every Telegram chat must send `/auth my-secret-passphrase` before any command is accepted.
 
-No HTTP server, no polling. Cursor fires the hook, you get the notification.
+## Telegram Commands
 
-After first setup, **restart Cursor once** so `.cursor/hooks.json` is loaded.
+### Terminal
 
-## Notes
+| Command | Description |
+|---------|-------------|
+| `/run <command>` | Run a shell command in the active session |
+| `/out` | Fetch latest output (tail) |
+| `/status` | Show running/idle state, cwd, last exit code |
+| `/pwd` | Print working directory |
+| `/cd <path>` | Change directory (restricted to workspace) |
+| `/kill` | Send SIGINT to running command |
 
-- Cursor auto-submit uses OS-level Enter key simulation and may require Accessibility permission on macOS.
-- Open a workspace folder before starting the bridge.
-- The hook config file (`.tg-bridge/hook-config.json`) contains your bot token locally. It is gitignored.
+### Sessions
+
+| Command | Description |
+|---------|-------------|
+| `/new <name>` | Create a new terminal session and switch to it |
+| `/use <name>` | Switch active session |
+| `/sessions` | List all sessions with status |
+
+### Cursor Agent
+
+| Command | Description |
+|---------|-------------|
+| `/agent <message>` | Send a prompt to the Cursor AI agent |
+| `yes` / `y` / `run` | Approve a pending agent shell command |
+| `no` / `n` / `skip` | Deny a pending agent shell command |
+
+### Other
+
+| Command | Description |
+|---------|-------------|
+| `/auth <secret>` | Authenticate (when `authSecret` is configured) |
+| `/help` | Show all available commands |
+
+## How It Works
+
+### Terminal mode
+
+`/run` spawns a child process in your workspace directory. stdout and stderr are captured in a rolling buffer. `/out` returns the last 60 lines. Commands auto-timeout after `commandTimeoutSec` (default 600s).
+
+### Agent mode
+
+`/agent` pastes your message into Cursor's composer and presses Enter. Cursor hooks (`beforeShellExecution`, `afterAgentResponse`, `stop`) send notifications back to Telegram:
+
+- **Approval needed** — when the agent wants to run a shell command, you get a Telegram message with the command. Reply `yes` or `no`.
+- **Agent completed** — when the agent finishes, the last response is sent to Telegram.
+- **Agent error/stopped** — error or abort status is relayed.
+
+Hooks are auto-deployed to `.cursor/hooks.json` and `.cursor/hooks/notify-telegram.mjs` on startup.
+
+## Settings Reference
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `tgBridge.botToken` | string | `""` | Telegram bot token from @BotFather |
+| `tgBridge.allowedChatIds` | number[] | `[]` | Allowed Telegram chat IDs (required) |
+| `tgBridge.autoStart` | boolean | `false` | Auto-start bridge on extension activation |
+| `tgBridge.authSecret` | string | `""` | Shared secret for `/auth` handshake |
+| `tgBridge.maxSessions` | number | `5` | Max concurrent terminal sessions |
+| `tgBridge.commandTimeoutSec` | number | `600` | Auto-kill timeout per `/run` command |
+| `tgBridge.responseTimeoutSec` | number | `300` | Agent response timeout |
+| `tgBridge.responseDirName` | string | `".tg-bridge"` | Workspace directory for bridge files |
+
+## Extension Commands
+
+| Command | Description |
+|---------|-------------|
+| `Telegram Bridge: Start` | Start the Telegram bridge |
+| `Telegram Bridge: Stop` | Stop the bridge |
+| `Telegram Bridge: Status` | Show bridge status and allowed chat IDs |
+
+## Security
+
+- **Chat ID allowlist** — only configured chat IDs can interact with the bridge.
+- **Auth secret** — optional second factor; chats must authenticate before commands are accepted.
+- **Command denylist** — `rm -rf`, `mkfs`, `dd`, fork bombs, `curl|sh`, `shutdown`, `reboot`, and other destructive patterns are blocked.
+- **Workspace-restricted paths** — `/cd` cannot navigate outside the workspace root.
+- **Sanitized environment** — child processes only inherit safe env vars (PATH, HOME, LANG, tool paths). Secrets like GITHUB_TOKEN or AWS keys are stripped.
+- **Command timeout** — processes exceeding the timeout are auto-killed.
+- **Session cap** — limited concurrent sessions prevent resource exhaustion.
+- **Token file permissions** — `.tg-bridge/hook-config.json` is written with `chmod 600`.
+- **Gitignored** — `.tg-bridge/` is in `.gitignore` so tokens never enter version control.
+
+## Project Structure
+
+```
+cursor-telegram-bridge/
+  src/
+    extension.ts          Entry point, lifecycle management
+    config.ts             Settings reader
+    types.ts              Shared interfaces
+    bridge/
+      manager.ts          Command router, session + agent orchestration
+    terminal/
+      session.ts          Shell process management, denylist, timeout
+    telegram/
+      bot.ts              grammy bot wrapper, message routing
+      auth.ts             Chat ID validation
+    adapters/
+      types.ts            EditorAdapter interface
+      detect.ts           Auto-detect Cursor vs VS Code
+      cursor.ts           Cursor composer injection
+      vscode.ts           VS Code chat injection
+    hooks/
+      config-writer.ts    Deploys hooks.json + hook script to workspace
+    utils/
+      keyboard.ts         OS-level keypress simulation
+      clipboard.ts        Safe clipboard read/write/restore
+      logger.ts           Output channel logging
+  .cursor/
+    hooks.json            Cursor hook configuration
+    hooks/
+      notify-telegram.mjs Hook script for agent notifications
+  .tg-bridge/             (gitignored) runtime config + debug log
+  out/                    (gitignored) compiled JS
+```
+
+## Development
+
+```bash
+npm install
+npm run watch        # rebuild on file changes
+# Press F5 in Cursor to launch Extension Development Host
+```
+
+## License
+
+MIT

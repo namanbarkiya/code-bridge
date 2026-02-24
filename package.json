@@ -61,6 +61,24 @@
           "type": "string",
           "default": ".tg-bridge",
           "description": "Workspace directory used for response files."
+        },
+        "tgBridge.authSecret": {
+          "type": "string",
+          "default": "",
+          "description": "Shared secret for Telegram auth. If set, users must send /auth <secret> before any commands are accepted."
+        },
+        "tgBridge.maxSessions": {
+          "type": "number",
+          "default": 5,
+          "minimum": 1,
+          "maximum": 20,
+          "description": "Maximum number of concurrent terminal sessions."
+        },
+        "tgBridge.commandTimeoutSec": {
+          "type": "number",
+          "default": 600,
+          "minimum": 10,
+          "description": "Max runtime in seconds for a /run command before auto-kill."
         }
       }
     }
@@ -73,8 +91,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "grammy": "^1.40.0",
-    "uuid": "^13.0.0"
+    "grammy": "^1.40.0"
   },
   "devDependencies": {
     "@types/node": "^25.3.0",

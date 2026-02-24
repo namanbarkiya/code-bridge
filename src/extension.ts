@@ -62,6 +62,13 @@ class BridgeRuntime implements vscode.Disposable {
             return;
         }
 
+        if (!cfg.allowedChatIds.length) {
+            vscode.window.showErrorMessage(
+                "Set tgBridge.allowedChatIds in settings before starting. The bridge refuses to start without at least one allowed chat ID.",
+            );
+            return;
+        }
+
         if (!vscode.workspace.workspaceFolders?.length) {
             vscode.window.showErrorMessage(
                 "Open a workspace/folder before starting Telegram Bridge.",
@@ -98,7 +105,7 @@ class BridgeRuntime implements vscode.Disposable {
             logWarn(`Agent bridge unavailable; continuing in terminal-only mode: ${String(err)}`);
         }
 
-        this.manager = new BridgeManager(this.telegram, workspaceRoot, adapter);
+        this.manager = new BridgeManager(this.telegram, workspaceRoot, cfg, adapter);
 
         try {
             await this.telegram.start();

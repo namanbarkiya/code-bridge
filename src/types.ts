@@ -9,4 +9,7 @@ export interface BridgeConfig {
   autoStart: boolean;
   responseTimeoutSec: number;
   responseDirName: string;
+  authSecret: string;
+  maxSessions: number;
+  commandTimeoutSec: number;
 }

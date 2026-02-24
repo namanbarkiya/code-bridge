@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { chmod } from "node:fs/promises";
 import { BridgeConfig } from "../types";
 import { logInfo, logError } from "../utils/logger";
 
@@ -183,6 +184,9 @@ export async function writeHookConfig(cfg: BridgeConfig): Promise<void> {
       configUri,
       Buffer.from(JSON.stringify(payload, null, 2), "utf8")
     );
+    try {
+      await chmod(configUri.fsPath, 0o600);
+    } catch {}
     logInfo(`Hook config written to ${configUri.fsPath}`);
 
     const cursorDir = vscode.Uri.joinPath(folder.uri, ".cursor");

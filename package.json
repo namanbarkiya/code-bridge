@@ -1,0 +1,85 @@
+{
+  "name": "cursor-telegram-bridge",
+  "displayName": "Cursor Telegram Bridge",
+  "description": "Bridge Telegram messages to Cursor/VS Code chat and return execution results.",
+  "version": "0.1.0",
+  "publisher": "local",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "tgBridge.start",
+        "title": "Telegram Bridge: Start"
+      },
+      {
+        "command": "tgBridge.stop",
+        "title": "Telegram Bridge: Stop"
+      },
+      {
+        "command": "tgBridge.status",
+        "title": "Telegram Bridge: Status"
+      }
+    ],
+    "configuration": {
+      "title": "Telegram Bridge",
+      "properties": {
+        "tgBridge.botToken": {
+          "type": "string",
+          "default": "",
+          "description": "Telegram Bot token from @BotFather."
+        },
+        "tgBridge.allowedChatIds": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "default": [],
+          "description": "Only these Telegram chat IDs can send messages to your local bridge."
+        },
+        "tgBridge.autoStart": {
+          "type": "boolean",
+          "default": false,
+          "description": "Start the bridge automatically when the extension activates."
+        },
+        "tgBridge.responseTimeoutSec": {
+          "type": "number",
+          "default": 300,
+          "minimum": 10,
+          "description": "Timeout in seconds for waiting on agent completion response."
+        },
+        "tgBridge.responseDirName": {
+          "type": "string",
+          "default": ".tg-bridge",
+          "description": "Workspace directory used for response files."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node ./scripts/build.mjs",
+    "watch": "node ./scripts/build.mjs --watch",
+    "compile": "npm run build",
+    "vscode:prepublish": "npm run build",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "grammy": "^1.40.0",
+    "uuid": "^13.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.3.0",
+    "@types/vscode": "^1.109.0",
+    "esbuild": "^0.27.3",
+    "typescript": "^5.9.3"
+  }
+}

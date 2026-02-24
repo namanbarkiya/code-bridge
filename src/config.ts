@@ -1,0 +1,15 @@
+import * as vscode from "vscode";
+import { BridgeConfig } from "./types";
+
+const KEY = "tgBridge";
+
+export function readConfig(): BridgeConfig {
+  const cfg = vscode.workspace.getConfiguration(KEY);
+  return {
+    botToken: cfg.get<string>("botToken", "").trim(),
+    allowedChatIds: cfg.get<number[]>("allowedChatIds", []),
+    autoStart: cfg.get<boolean>("autoStart", false),
+    responseTimeoutSec: cfg.get<number>("responseTimeoutSec", 300),
+    responseDirName: cfg.get<string>("responseDirName", ".tg-bridge")
+  };
+}

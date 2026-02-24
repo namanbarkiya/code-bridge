@@ -1,0 +1,6 @@
+**/.vscode/**
+**/.tg-bridge/**
+**/src/**
+**/tsconfig.json
+**/scripts/**
+**/product.md

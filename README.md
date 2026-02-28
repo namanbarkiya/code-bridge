@@ -1,8 +1,10 @@
 # Code Bridge
 
-Control your Cursor/VS Code editor remotely from Telegram. Run terminal commands, send prompts to the Cursor AI agent, and approve or deny agent actions — all from your phone.
+Control your Cursor/VS Code editor remotely from Telegram. Run terminal commands, send prompts to the Cursor AI agent, and approve or deny agent actions - all from your phone. 
 
 No extra AI layer. Messages go straight through; terminal output comes straight back.
+
+[![Watch the video](https://img.youtube.com/vi/Sa8XR72CdOg/maxresdefault.jpg)](https://www.youtube.com/watch?v=Sa8XR72CdOg)
 
 ## Features
 
